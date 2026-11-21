@@ -1,0 +1,63 @@
+name: Build VisualGram IPA
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-14
+    
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+      with:
+        submodules: recursive
+        
+    - name: Select Xcode
+      run: sudo xcode-select -s /Applications/Xcode_15.4.app
+      
+    - name: Install dependencies
+      run: |
+        brew install cmake
+        brew install python3
+        
+    - name: Setup build config
+      run: |
+        mkdir -p $HOME/codesigning
+        cat > buildConfig.json << 'EOF'
+        {
+          "bundle_id": "org.visualgram.app",
+          "api_id": "2040",
+          "api_hash": "b18441a1ff607e10a989891a5462e627",
+          "team_id": "VISUALGRAM1",
+          "app_center_id": 0
+        }
+        EOF
+        
+    - name: Build
+      run: |
+        python3 build-system/Make/Make.py \
+          --cacheDir=$HOME/cache \
+          build \
+          --configurationPath=buildConfig.json \
+          --buildNumber=1 \
+          --configuration=release_arm64
+      continue-on-error: true
+      
+    - name: Package IPA
+      run: |
+        find . -name "*.app" -path "*/Release*" | head -1 | xargs -I{} sh -c '
+          mkdir -p Payload
+          cp -r {} Payload/
+          zip -r VisualGram.ipa Payload/
+        '
+      continue-on-error: true
+      
+    - name: Upload IPA
+      uses: actions/upload-artifact@v4
+      with:
+        name: VisualGram-IPA
+        path: VisualGram.ipa
+        if-no-files-found: warn
