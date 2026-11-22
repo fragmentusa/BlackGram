@@ -43,7 +43,10 @@ jobs:
           "is_internal_build": "true",
           "is_appstore_build": "false",
           "appstore_id": "0",
-          "app_specific_url_scheme": "blackgram"
+          "app_specific_url_scheme": "blackgram",
+          "premium_iap_product_id": "",
+          "enable_siri": false,
+          "enable_icloud": false
         }
         CONF
 
@@ -80,11 +83,11 @@ jobs:
         echo "Found: $APP"
 
         mkdir -p Payload
-        cp -r "$APP" Payload/
+        cp -R "$APP" Payload/
 
         zip -r BlackGram.ipa Payload/
 
-        echo "IPA created successfully"
+        echo "=== IPA CREATED ==="
         ls -lh BlackGram.ipa
 
     - name: Upload IPA
@@ -93,3 +96,4 @@ jobs:
         name: BlackGram-IPA
         path: BlackGram.ipa
         if-no-files-found: error
+        retention-days: 7
