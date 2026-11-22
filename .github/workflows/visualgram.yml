@@ -27,26 +27,11 @@ jobs:
     - name: Fix BUILD file
       run: |
         python3 -c "
+        import re
         content = open('Telegram/BUILD').read()
-        bad = '''    provisioning_profile = select({
-            \":disableProvisioningProfilesSetting\": None,
-            \"//conditions:default\": \"@build_configuration//provisioning:Intents.mobileprovision\",
-        }),
-            provisioning_profile = select({
-            \":disableProvisioningProfilesSetting\": None,
-            \"//conditions:default\": \"@build_configuration//provisioning:NotificationContent.mobileprovision\",
-        }),'''
-        good = '''    provisioning_profile = select({
-            \":disableProvisioningProfilesSetting\": None,
-            \"//conditions:default\": \"@build_configuration//provisioning:NotificationContent.mobileprovision\",
-        }),'''
-        if 'provisioning_profile' in content:
-            import re
-            fixed = re.sub(r'provisioning_profile = select\(\{[^\)]+Intents\.mobileprovision[^\)]+\}\),\s*provisioning_profile', 'provisioning_profile', content)
-            open('Telegram/BUILD', 'w').write(fixed)
-            print('Fixed BUILD file')
-        else:
-            print('No fix needed')
+        fixed = re.sub(r'provisioning_profile = select\(\{[^\)]+Intents\.mobileprovision[^\)]+\}\),\s*\n\s*provisioning_profile', 'provisioning_profile', content)
+        open('Telegram/BUILD', 'w').write(fixed)
+        print('Done')
         "
 
     - name: Install Python deps
@@ -78,7 +63,7 @@ jobs:
           --configuration=release_arm64 \
           --xcodeManagedCodesigning \
           --overrideXcodeVersion \
-          --disableProvisioningProfiles
+          --bazelArguments="--//Telegram:disableProvisioningProfiles=true"
       continue-on-error: true
 
     - name: Find and package IPA
