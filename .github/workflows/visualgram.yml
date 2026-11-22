@@ -49,7 +49,14 @@ jobs:
           "is_internal_build": "true",
           "is_appstore_build": "false",
           "appstore_id": "0",
-          "app_specific_url_scheme": "blackgram"
+          "app_specific_url_scheme": "blackgram",
+          "premium_iap_product_id": "org.blackgram.premium",
+          "enable_siri": false,
+          "enable_icloud": false,
+          "enable_map_location": false,
+          "enable_premium_app": false,
+          "aps_environment": "development",
+          "additional_codesigning_output_path": null
         }
         EOF
 
