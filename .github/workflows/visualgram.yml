@@ -24,15 +24,19 @@ jobs:
     - name: Show Xcode version
       run: xcodebuild -version
 
-    - name: Fix BUILD file
+    - name: Fix BUILD and bazelrc
       run: |
         python3 -c "
         import re
         content = open('Telegram/BUILD').read()
         fixed = re.sub(r'provisioning_profile = select\(\{[^\)]+Intents\.mobileprovision[^\)]+\}\),\s*\n\s*provisioning_profile', 'provisioning_profile', content)
         open('Telegram/BUILD', 'w').write(fixed)
-        print('Done')
+        print('BUILD fixed')
         "
+        # Add disable provisioning profiles to bazelrc
+        echo 'build --//Telegram:disableProvisioningProfiles=true' >> .bazelrc
+        echo 'build --//Telegram:disableExtensions=true' >> .bazelrc
+        echo 'bazelrc patched'
 
     - name: Install Python deps
       run: pip3 install pyaml --break-system-packages || true
@@ -65,12 +69,12 @@ jobs:
         python3 build-system/Make/Make.py \
           --overrideXcodeVersion \
           --cacheDir=$HOME/cache \
-          --bazelArguments="--//Telegram:disableProvisioningProfiles=true" \
           build \
           --configurationPath=buildConfig.json \
           --buildNumber=1 \
           --configuration=release_arm64 \
-          --xcodeManagedCodesigning
+          --xcodeManagedCodesigning \
+          --disableProvisioningProfiles
       continue-on-error: true
 
     - name: Find and package IPA
