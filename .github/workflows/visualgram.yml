@@ -1,99 +1,97 @@
 
-name: Build VisualGram IPA
+name: Build BlackGram IPA
 
 on:
   push:
-    branches: [ master, main ]
+    branches: [master, main]
   workflow_dispatch:
 
 jobs:
   build:
-    runs-on: macos-latest
+    runs-on: macos-15
 
     steps:
-    - name: Checkout
-      uses: actions/checkout@v4
-      with:
-        submodules: false
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
 
-    - name: Init submodules
-      run: |
-        git submodule update --init --recursive
-      env:
-        GIT_CONFIG_COUNT: 1
-        GIT_CONFIG_KEY_0: url.https://github.com/TelegramMessenger/.insteadOf
-        GIT_CONFIG_VALUE_0: https://github.com/fragmentusa/
+      - name: Setup submodules
+        run: |
+          git submodule update --init --recursive
+        env:
+          GIT_CONFIG_COUNT: 1
+          GIT_CONFIG_KEY_0: url.https://github.com/TelegramMessenger/.insteadOf
+          GIT_CONFIG_VALUE_0: https://github.com/fragmentusa/
 
-    - name: Show Xcode version
-      run: xcodebuild -version
+      - name: Show Xcode
+        run: |
+          xcodebuild -version
+          xcode-select -p
 
-    - name: Install Python deps
-      run: |
-        pip3 install pyaml --break-system-packages || pip3 install pyaml
+      - name: Install dependencies
+        run: |
+          python3 -m pip install pyaml --break-system-packages
 
-    - name: Setup build config
-      run: |
-        cat > buildConfig.json << 'CONF'
-        {
-          "bundle_id": "org.blackgram.app",
-          "api_id": "2040",
-          "api_hash": "b18441a1ff607e10a989891a5462e627",
-          "team_id": "BLACKGRAM1",
-          "app_center_id": 0,
-          "is_internal_build": "true",
-          "is_appstore_build": "false",
-          "appstore_id": "0",
-          "app_specific_url_scheme": "blackgram",
-          "premium_iap_product_id": "",
-          "enable_siri": false,
-          "enable_icloud": false
-        }
-        CONF
+      - name: Create build config
+        run: |
+          cat > buildConfig.json <<'CONF'
+          {
+            "bundle_id": "org.blackgram.app",
+            "api_id": "2040",
+            "api_hash": "b18441a1ff607e10a989891a5462e627",
+            "team_id": "",
+            "app_center_id": 0,
+            "is_internal_build": "true",
+            "is_appstore_build": "false",
+            "appstore_id": "0",
+            "app_specific_url_scheme": "blackgram",
+            "premium_iap_product_id": "",
+            "enable_siri": false,
+            "enable_icloud": false
+          }
+          CONF
 
-    - name: Build
-      run: |
-        python3 build-system/Make/Make.py \
-          --cacheDir=$HOME/cache \
-          --overrideXcodeVersion \
-          build \
-          --configurationPath=buildConfig.json \
-          --buildNumber=1 \
-          --configuration=release_arm64 \
-          --xcodeManagedCodesigning
+      - name: Build BlackGram
+        run: |
+          python3 build-system/Make/Make.py \
+            --cacheDir="$HOME/cache" \
+            --overrideXcodeVersion \
+            build \
+            --configurationPath=buildConfig.json \
+            --buildNumber=1 \
+            --configuration=release_arm64 \
+            --disableProvisioningProfiles
 
-    - name: Find and package IPA
-      run: |
-        echo "=== Searching for Telegram.app ==="
+      - name: Find application
+        run: |
+          APP=$(find . "$HOME/cache" \
+            -type d -name "Telegram.app" \
+            -not -path "*Simulator*" 2>/dev/null | head -1)
 
-        APP=$(find . -name "Telegram.app" 2>/dev/null | grep -v Simulator | head -1)
+          if [ -z "$APP" ]; then
+            echo "Telegram.app not found"
+            exit 1
+          fi
 
-        if [ -z "$APP" ]; then
-          APP=$(find "$HOME/cache" -name "Telegram.app" 2>/dev/null | grep -v Simulator | head -1)
-        fi
+          echo "Found: $APP"
+          echo "APP_PATH=$APP" >> "$GITHUB_ENV"
 
-        if [ -z "$APP" ]; then
-          APP=$(find "$HOME/Library/Developer/Xcode/DerivedData" -name "Telegram.app" 2>/dev/null | grep -v Simulator | head -1)
-        fi
+      - name: Package IPA
+        run: |
+          rm -rf Payload BlackGram.ipa
+          mkdir Payload
 
-        if [ -z "$APP" ]; then
-          echo "ERROR: Telegram.app not found"
-          exit 1
-        fi
+          cp -R "$APP_PATH" Payload/Telegram.app
 
-        echo "Found: $APP"
+          /usr/bin/zip -qry BlackGram.ipa Payload
 
-        mkdir -p Payload
-        cp -R "$APP" Payload/
+          ls -lh BlackGram.ipa
 
-        zip -r BlackGram.ipa Payload/
-
-        echo "=== IPA CREATED ==="
-        ls -lh BlackGram.ipa
-
-    - name: Upload IPA
-      uses: actions/upload-artifact@v4
-      with:
-        name: BlackGram-IPA
-        path: BlackGram.ipa
-        if-no-files-found: error
-        retention-days: 7
+      - name: Upload IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: BlackGram-IPA
+          path: BlackGram.ipa
+          if-no-files-found: error
+          retention-days: 7
