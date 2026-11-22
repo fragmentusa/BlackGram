@@ -56,7 +56,8 @@ jobs:
           build \
           --configurationPath=buildConfig.json \
           --buildNumber=1 \
-          --configuration=release_arm64
+          --configuration=release_arm64 \
+          --xcodeManagedCodesigning
       continue-on-error: true
 
     - name: Find and package IPA
@@ -65,31 +66,37 @@ jobs:
         APP=$(find . -name "Telegram.app" 2>/dev/null | grep -v Simulator | head -1)
         
         if [ -z "$APP" ]; then
-          echo "=== Not found in repo, searching cache ==="
+          echo "=== Searching in cache ==="
           APP=$(find $HOME/cache -name "Telegram.app" 2>/dev/null | grep -v Simulator | head -1)
+        fi
+
+        if [ -z "$APP" ]; then
+          echo "=== Searching DerivedData ==="
+          APP=$(find ~/Library/Developer/Xcode/DerivedData -name "Telegram.app" 2>/dev/null | grep -v Simulator | head -1)
         fi
         
         if [ -z "$APP" ]; then
-          echo "=== Searching all .app except system ones ==="
+          echo "=== Any .app except system ==="
           APP=$(find $HOME -name "*.app" 2>/dev/null \
             | grep -v Simulator \
             | grep -v "group.is" \
             | grep -v "workflow" \
+            | grep -v "monitor" \
             | grep -v "/System/" \
-            | grep -v "/Library/Developer/CoreSimulator" \
+            | grep -v "CoreSimulator" \
             | head -1)
         fi
         
         if [ -n "$APP" ]; then
-          echo "Found app: $APP"
+          echo "Found: $APP"
           mkdir -p Payload
           cp -r "$APP" Payload/
           zip -r BlackGram.ipa Payload/
-          echo "IPA created successfully"
+          echo "IPA created"
           ls -la BlackGram.ipa
         else
-          echo "No .app found anywhere"
-          find $HOME -name "*.app" 2>/dev/null | head -20
+          echo "No .app found"
+          find $HOME -name "*.app" 2>/dev/null | grep -v Simulator | head -20
         fi
       continue-on-error: true
 
