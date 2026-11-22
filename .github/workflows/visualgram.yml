@@ -6,34 +6,52 @@ on:
     branches: [master, main]
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   build:
-    runs-on: macos-15
+    runs-on: macos-latest
 
     steps:
+      # 1. Checkout
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          submodules: recursive
+          submodules: false
+          fetch-depth: 1
 
-      - name: Setup submodules
+      # 2. Configure Git
+      - name: Configure Git URLs
         run: |
-          git submodule update --init --recursive
-        env:
-          GIT_CONFIG_COUNT: 1
-          GIT_CONFIG_KEY_0: url.https://github.com/TelegramMessenger/.insteadOf
-          GIT_CONFIG_VALUE_0: https://github.com/fragmentusa/
+          git config --global \
+            url."https://github.com/TelegramMessenger/".insteadOf \
+            "https://github.com/fragmentusa/"
 
-      - name: Show Xcode
+      # 3. Initialize submodules
+      - name: Init submodules
+        run: |
+          git submodule sync --recursive
+          git submodule update --init --recursive
+
+      # 4. Check submodules
+      - name: Check submodules
+        run: |
+          git submodule status --recursive
+
+      # 5. Xcode
+      - name: Show Xcode version
         run: |
           xcodebuild -version
           xcode-select -p
 
-      - name: Install dependencies
+      # 6. Python dependencies
+      - name: Install Python dependencies
         run: |
           python3 -m pip install pyaml --break-system-packages
 
-      - name: Create build config
+      # 7. Build configuration
+      - name: Setup build config
         run: |
           cat > buildConfig.json <<'CONF'
           {
@@ -52,6 +70,7 @@ jobs:
           }
           CONF
 
+      # 8. Build
       - name: Build BlackGram
         run: |
           python3 build-system/Make/Make.py \
@@ -63,31 +82,44 @@ jobs:
             --configuration=release_arm64 \
             --disableProvisioningProfiles
 
-      - name: Find application
+      # 9. Find application
+      - name: Find Telegram.app
         run: |
           APP=$(find . "$HOME/cache" \
             -type d -name "Telegram.app" \
-            -not -path "*Simulator*" 2>/dev/null | head -1)
+            -not -path "*Simulator*" \
+            2>/dev/null | head -1)
 
           if [ -z "$APP" ]; then
-            echo "Telegram.app not found"
+            APP=$(find "$HOME/Library/Developer/Xcode/DerivedData" \
+              -type d -name "Telegram.app" \
+              -not -path "*Simulator*" \
+              2>/dev/null | head -1)
+          fi
+
+          if [ -z "$APP" ]; then
+            echo "ERROR: Telegram.app not found"
             exit 1
           fi
 
           echo "Found: $APP"
           echo "APP_PATH=$APP" >> "$GITHUB_ENV"
 
+      # 10. Package IPA
       - name: Package IPA
         run: |
           rm -rf Payload BlackGram.ipa
-          mkdir Payload
+
+          mkdir -p Payload
 
           cp -R "$APP_PATH" Payload/Telegram.app
 
           /usr/bin/zip -qry BlackGram.ipa Payload
 
+          echo "=== IPA CREATED ==="
           ls -lh BlackGram.ipa
 
+      # 11. Upload artifact
       - name: Upload IPA
         uses: actions/upload-artifact@v4
         with:
