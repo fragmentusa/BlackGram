@@ -56,14 +56,14 @@ jobs:
     - name: Build
       run: |
         python3 build-system/Make/Make.py \
+          --overrideXcodeVersion \
           --cacheDir=$HOME/cache \
+          --bazelArguments="--//Telegram:disableProvisioningProfiles=true" \
           build \
           --configurationPath=buildConfig.json \
           --buildNumber=1 \
           --configuration=release_arm64 \
-          --xcodeManagedCodesigning \
-          --overrideXcodeVersion \
-          --bazelArguments="--//Telegram:disableProvisioningProfiles=true"
+          --xcodeManagedCodesigning
       continue-on-error: true
 
     - name: Find and package IPA
