@@ -61,22 +61,35 @@ jobs:
 
     - name: Find and package IPA
       run: |
-        APP=$(find $HOME -name "*.app" 2>/dev/null | grep -v Simulator | head -1)
+        echo "=== Searching for Telegram.app ==="
+        APP=$(find . -name "Telegram.app" 2>/dev/null | grep -v Simulator | head -1)
+        
+        if [ -z "$APP" ]; then
+          echo "=== Not found in repo, searching cache ==="
+          APP=$(find $HOME/cache -name "Telegram.app" 2>/dev/null | grep -v Simulator | head -1)
+        fi
+        
+        if [ -z "$APP" ]; then
+          echo "=== Searching all .app except system ones ==="
+          APP=$(find $HOME -name "*.app" 2>/dev/null \
+            | grep -v Simulator \
+            | grep -v "group.is" \
+            | grep -v "workflow" \
+            | grep -v "/System/" \
+            | grep -v "/Library/Developer/CoreSimulator" \
+            | head -1)
+        fi
+        
         if [ -n "$APP" ]; then
+          echo "Found app: $APP"
           mkdir -p Payload
           cp -r "$APP" Payload/
           zip -r BlackGram.ipa Payload/
-          echo "IPA created: BlackGram.ipa"
+          echo "IPA created successfully"
+          ls -la BlackGram.ipa
         else
-          echo "No .app found, trying DerivedData..."
-          APP2=$(find ~/Library/Developer/Xcode/DerivedData -name "*.app" 2>/dev/null | grep -v Simulator | head -1)
-          if [ -n "$APP2" ]; then
-            mkdir -p Payload
-            cp -r "$APP2" Payload/
-            zip -r BlackGram.ipa Payload/
-          else
-            echo "Still no .app found"
-          fi
+          echo "No .app found anywhere"
+          find $HOME -name "*.app" 2>/dev/null | head -20
         fi
       continue-on-error: true
 
