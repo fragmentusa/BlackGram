@@ -1,3 +1,4 @@
+
 name: Build VisualGram IPA
 
 on:
@@ -27,7 +28,8 @@ jobs:
       run: xcodebuild -version
 
     - name: Install Python deps
-      run: pip3 install pyaml --break-system-packages || pip3 install pyaml
+      run: |
+        pip3 install pyaml --break-system-packages || pip3 install pyaml
 
     - name: Setup build config
       run: |
@@ -49,50 +51,45 @@ jobs:
       run: |
         python3 build-system/Make/Make.py \
           --cacheDir=$HOME/cache \
+          --overrideXcodeVersion \
           build \
           --configurationPath=buildConfig.json \
           --buildNumber=1 \
           --configuration=release_arm64 \
-          --xcodeManagedCodesigning \
-          --overrideXcodeVersion
-      continue-on-error: true
+          --xcodeManagedCodesigning
 
     - name: Find and package IPA
       run: |
         echo "=== Searching for Telegram.app ==="
+
         APP=$(find . -name "Telegram.app" 2>/dev/null | grep -v Simulator | head -1)
+
         if [ -z "$APP" ]; then
-          APP=$(find $HOME/cache -name "Telegram.app" 2>/dev/null | grep -v Simulator | head -1)
+          APP=$(find "$HOME/cache" -name "Telegram.app" 2>/dev/null | grep -v Simulator | head -1)
         fi
+
         if [ -z "$APP" ]; then
-          APP=$(find ~/Library/Developer/Xcode/DerivedData -name "Telegram.app" 2>/dev/null | grep -v Simulator | head -1)
+          APP=$(find "$HOME/Library/Developer/Xcode/DerivedData" -name "Telegram.app" 2>/dev/null | grep -v Simulator | head -1)
         fi
+
         if [ -z "$APP" ]; then
-          APP=$(find $HOME -name "*.app" 2>/dev/null \
-            | grep -v Simulator \
-            | grep -v "group.is" \
-            | grep -v "workflow" \
-            | grep -v "monitor" \
-            | grep -v "/System/" \
-            | grep -v "CoreSimulator" \
-            | head -1)
+          echo "ERROR: Telegram.app not found"
+          exit 1
         fi
-        if [ -n "$APP" ]; then
-          echo "Found: $APP"
-          mkdir -p Payload
-          cp -r "$APP" Payload/
-          zip -r BlackGram.ipa Payload/
-          echo "IPA created"
-          ls -la BlackGram.ipa
-        else
-          echo "No .app found"
-          find $HOME -name "*.app" 2>/dev/null | grep -v Simulator | head -20
-        fi
-      continue-on-error: true
+
+        echo "Found: $APP"
+
+        mkdir -p Payload
+        cp -r "$APP" Payload/
+
+        zip -r BlackGram.ipa Payload/
+
+        echo "IPA created successfully"
+        ls -lh BlackGram.ipa
 
     - name: Upload IPA
       uses: actions/upload-artifact@v4
       with:
         name: BlackGram-IPA
         path: BlackGram.ipa
-        if-no-files-found: warn
+        if-no-files-found: error
