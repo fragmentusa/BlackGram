@@ -8,7 +8,6 @@ on:
 jobs:
   build:
     runs-on: macos-latest
-
     steps:
     - name: Checkout
       uses: actions/checkout@v4
@@ -16,8 +15,7 @@ jobs:
         submodules: false
 
     - name: Init submodules
-      run: |
-        git submodule update --init --recursive
+      run: git submodule update --init --recursive
       env:
         GIT_CONFIG_COUNT: 1
         GIT_CONFIG_KEY_0: url.https://github.com/TelegramMessenger/.insteadOf
@@ -28,52 +26,35 @@ jobs:
 
     - name: Fix BUILD file
       run: |
-        python3 << 'PYEOF'
-        with open('Telegram/BUILD', 'r') as f:
-            content = f.read()
-        
-        # Fix duplicate provisioning_profile in NotificationContentExtension
-        bad = """    provisioning_profile = select({
-        ":disableProvisioningProfilesSetting": None,
-        "//conditions:default": "@build_configuration//provisioning:Intents.mobileprovision",
-    }),
-    provisioning_profile = select({
-        ":disableProvisioningProfilesSetting": None,
-        "//conditions:default": "@build_configuration//provisioning:NotificationContent.mobileprovision",
-    }),"""
-        
-        good = """    provisioning_profile = select({
-        ":disableProvisioningProfilesSetting": None,
-        "//conditions:default": "@build_configuration//provisioning:NotificationContent.mobileprovision",
-    }),"""
-        
-        if bad in content:
-            content = content.replace(bad, good)
-            print("Fixed duplicate provisioning_profile")
-        else:
-            print("Pattern not found, trying alternative fix...")
-            # Alternative: remove any double provisioning_profile occurrences
+        python3 -c "
+        content = open('Telegram/BUILD').read()
+        bad = '''    provisioning_profile = select({
+            \":disableProvisioningProfilesSetting\": None,
+            \"//conditions:default\": \"@build_configuration//provisioning:Intents.mobileprovision\",
+        }),
+            provisioning_profile = select({
+            \":disableProvisioningProfilesSetting\": None,
+            \"//conditions:default\": \"@build_configuration//provisioning:NotificationContent.mobileprovision\",
+        }),'''
+        good = '''    provisioning_profile = select({
+            \":disableProvisioningProfilesSetting\": None,
+            \"//conditions:default\": \"@build_configuration//provisioning:NotificationContent.mobileprovision\",
+        }),'''
+        if 'provisioning_profile' in content:
             import re
-            content = re.sub(
-                r'(provisioning_profile = select\(\{[^}]+Intents\.mobileprovision[^}]+\}\),)\s*\n(\s*provisioning_profile)',
-                r'\2',
-                content
-            )
-        
-        with open('Telegram/BUILD', 'w') as f:
-            f.write(content)
-        
-        # Verify fix
-        if 'duplicate keyword argument' not in content:
-            print("BUILD file looks clean")
-        PYEOF
+            fixed = re.sub(r'provisioning_profile = select\(\{[^\)]+Intents\.mobileprovision[^\)]+\}\),\s*provisioning_profile', 'provisioning_profile', content)
+            open('Telegram/BUILD', 'w').write(fixed)
+            print('Fixed BUILD file')
+        else:
+            print('No fix needed')
+        "
 
     - name: Install Python deps
-      run: pip3 install pyaml --break-system-packages || pip3 install pyaml
+      run: pip3 install pyaml --break-system-packages || true
 
     - name: Setup build config
       run: |
-        cat > buildConfig.json << 'CONF'
+        cat > buildConfig.json << EOF
         {
           "bundle_id": "org.blackgram.app",
           "api_id": "2040",
@@ -85,7 +66,7 @@ jobs:
           "appstore_id": "0",
           "app_specific_url_scheme": "blackgram"
         }
-        CONF
+        EOF
 
     - name: Build
       run: |
@@ -102,22 +83,13 @@ jobs:
 
     - name: Find and package IPA
       run: |
-        echo "=== Searching for Telegram.app ==="
-        APP=$(find . -name "Telegram.app" 2>/dev/null | grep -v Simulator | head -1)
-        if [ -z "$APP" ]; then
-          APP=$(find $HOME/cache -name "Telegram.app" 2>/dev/null | grep -v Simulator | head -1)
-        fi
-        if [ -z "$APP" ]; then
-          APP=$(find ~/Library/Developer/Xcode/DerivedData -name "Telegram.app" 2>/dev/null | grep -v Simulator | head -1)
-        fi
+        APP=$(find . $HOME/cache ~/Library/Developer/Xcode/DerivedData \
+          -name "Telegram.app" 2>/dev/null \
+          | grep -v Simulator | head -1)
         if [ -z "$APP" ]; then
           APP=$(find $HOME -name "*.app" 2>/dev/null \
             | grep -v Simulator \
-            | grep -v "group.is" \
-            | grep -v "workflow" \
-            | grep -v "monitor" \
-            | grep -v "/System/" \
-            | grep -v "CoreSimulator" \
+            | grep -v "group.is\|workflow\|monitor\|/System/\|CoreSimulator" \
             | head -1)
         fi
         if [ -n "$APP" ]; then
@@ -125,11 +97,10 @@ jobs:
           mkdir -p Payload
           cp -r "$APP" Payload/
           zip -r BlackGram.ipa Payload/
-          echo "IPA created"
           ls -la BlackGram.ipa
         else
-          echo "No .app found"
-          find $HOME -name "*.app" 2>/dev/null | grep -v Simulator | head -20
+          echo "No app found"
+          find $HOME -name "*.app" 2>/dev/null | grep -v Simulator | head -10
         fi
       continue-on-error: true
 
