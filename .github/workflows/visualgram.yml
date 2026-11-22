@@ -2,40 +2,52 @@ name: Build VisualGram IPA
 
 on:
   push:
-    branches: [ main ]
+    branches: [ master, main ]
   workflow_dispatch:
 
 jobs:
   build:
     runs-on: macos-latest
-    
+
     steps:
     - name: Checkout
       uses: actions/checkout@v4
       with:
-        submodules: recursive
-        
-    - name: Select Xcode
-      run: sudo xcode-select -s /Applications/Xcode_15.4.app
-      
-    - name: Install dependencies
+        submodules: false
+
+    - name: Init submodules
       run: |
-        brew install cmake
-        brew install python3
-        
+        git submodule update --init --recursive
+      env:
+        GIT_CONFIG_COUNT: 1
+        GIT_CONFIG_KEY_0: url.https://github.com/TelegramMessenger/.insteadOf
+        GIT_CONFIG_VALUE_0: https://github.com/fragmentusa/
+
+    - name: Select Xcode
+      run: sudo xcode-select -s /Applications/Xcode_16.app || sudo xcode-select -s /Applications/Xcode_15.4.app || sudo xcode-select -s /Applications/Xcode_15.app
+
+    - name: Show Xcode version
+      run: xcodebuild -version
+
+    - name: Install Python deps
+      run: pip3 install pyaml --break-system-packages || pip3 install pyaml
+
     - name: Setup build config
       run: |
-        mkdir -p $HOME/codesigning
-        cat > buildConfig.json << 'EOF'
+        cat > buildConfig.json << 'CONF'
         {
-          "bundle_id": "org.visualgram.app",
+          "bundle_id": "org.blackgram.app",
           "api_id": "2040",
           "api_hash": "b18441a1ff607e10a989891a5462e627",
-          "team_id": "VISUALGRAM1",
-          "app_center_id": 0
+          "team_id": "BLACKGRAM1",
+          "app_center_id": 0,
+          "is_internal_build": "true",
+          "is_appstore_build": "false",
+          "appstore_id": "0",
+          "app_specific_url_scheme": "blackgram"
         }
-        EOF
-        
+        CONF
+
     - name: Build
       run: |
         python3 build-system/Make/Make.py \
@@ -45,19 +57,31 @@ jobs:
           --buildNumber=1 \
           --configuration=release_arm64
       continue-on-error: true
-      
-    - name: Package IPA
+
+    - name: Find and package IPA
       run: |
-        find . -name "*.app" -path "*/Release*" | head -1 | xargs -I{} sh -c '
+        APP=$(find $HOME -name "*.app" 2>/dev/null | grep -v Simulator | head -1)
+        if [ -n "$APP" ]; then
           mkdir -p Payload
-          cp -r {} Payload/
-          zip -r VisualGram.ipa Payload/
-        '
+          cp -r "$APP" Payload/
+          zip -r BlackGram.ipa Payload/
+          echo "IPA created: BlackGram.ipa"
+        else
+          echo "No .app found, trying DerivedData..."
+          APP2=$(find ~/Library/Developer/Xcode/DerivedData -name "*.app" 2>/dev/null | grep -v Simulator | head -1)
+          if [ -n "$APP2" ]; then
+            mkdir -p Payload
+            cp -r "$APP2" Payload/
+            zip -r BlackGram.ipa Payload/
+          else
+            echo "Still no .app found"
+          fi
+        fi
       continue-on-error: true
-      
+
     - name: Upload IPA
       uses: actions/upload-artifact@v4
       with:
-        name: VisualGram-IPA
-        path: VisualGram.ipa
+        name: BlackGram-IPA
+        path: BlackGram.ipa
         if-no-files-found: warn
