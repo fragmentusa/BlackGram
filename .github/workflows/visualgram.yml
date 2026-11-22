@@ -21,7 +21,7 @@ jobs:
           submodules: false
           fetch-depth: 1
 
-      # 2. Configure Git
+      # 2. Configure Git URLs
       - name: Configure Git URLs
         run: |
           git config --global \
@@ -70,7 +70,7 @@ jobs:
           }
           CONF
 
-      # 8. Build
+      # 8. Build BlackGram
       - name: Build BlackGram
         run: |
           python3 build-system/Make/Make.py \
@@ -80,7 +80,7 @@ jobs:
             --configurationPath=buildConfig.json \
             --buildNumber=1 \
             --configuration=release_arm64 \
-            --disableProvisioningProfiles
+            --xcodeManagedCodesigning
 
       # 9. Find application
       - name: Find Telegram.app
@@ -109,7 +109,6 @@ jobs:
       - name: Package IPA
         run: |
           rm -rf Payload BlackGram.ipa
-
           mkdir -p Payload
 
           cp -R "$APP_PATH" Payload/Telegram.app
@@ -119,7 +118,7 @@ jobs:
           echo "=== IPA CREATED ==="
           ls -lh BlackGram.ipa
 
-      # 11. Upload artifact
+      # 11. Upload IPA
       - name: Upload IPA
         uses: actions/upload-artifact@v4
         with:
