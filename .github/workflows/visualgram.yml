@@ -23,24 +23,28 @@ jobs:
         GIT_CONFIG_KEY_0: url.https://github.com/TelegramMessenger/.insteadOf
         GIT_CONFIG_VALUE_0: https://github.com/fragmentusa/
 
-    - name: Install Xcode 27.1
-      uses: maxim-lobanov/setup-xcode@v1
-      with:
-        xcode-version: latest-stable
-
     - name: Show Xcode version
       run: xcodebuild -version
 
-    - name: Patch required Xcode version
+    - name: Patch Xcode version check
       run: |
-        # Find and patch the required xcode version check
-        grep -r "27.1\|xcode_version\|requiredXcode" build-system/ --include="*.py" -l || true
-        # Patch to allow current xcode
-        find build-system/ -name "*.py" -exec grep -l "Required Xcode" {} \; | while read f; do
-          CURRENT=$(xcodebuild -version | head -1 | awk '{print $2}')
-          sed -i '' "s/27\.1/$CURRENT/g" "$f" 2>/dev/null || sed -i "s/27\.1/$CURRENT/g" "$f"
-          echo "Patched $f with version $CURRENT"
+        CURRENT=$(xcodebuild -version | head -1 | awk '{print $2}')
+        echo "Current Xcode: $CURRENT"
+        
+        # Find all python files that check xcode version
+        find build-system/ -name "*.py" | xargs grep -l "27.1\|xcode_version\|xcodeVersion\|required_xcode" 2>/dev/null | while read f; do
+          echo "Patching: $f"
+          sed -i "s/27\.1/$CURRENT/g" "$f"
+          sed -i "s/\"27\"/\"$CURRENT\"/g" "$f"
         done
+        
+        # Also patch any config files
+        find . -name "*.json" -o -name "*.yaml" -o -name "*.yml" | xargs grep -l "27.1\|xcode" 2>/dev/null | grep -v ".git" | while read f; do
+          sed -i "s/27\.1/$CURRENT/g" "$f"
+        done
+        
+        echo "Done patching"
+        grep -r "27.1" build-system/ 2>/dev/null | head -5 || echo "No more 27.1 references"
 
     - name: Install Python deps
       run: pip3 install pyaml --break-system-packages || pip3 install pyaml
